@@ -382,7 +382,7 @@ function sessionClear()
         renderUserInfo(data.info, sessionInfoText);
 
       } catch (e) {
-        console.log(e)
+        console.log(e);
       }
 
     });
@@ -394,7 +394,7 @@ function sessionClear()
       console.info(data.message);
       location.reload();
     } catch (e) {
-      console.log(e)
+      console.log(e);
     }
   });
 
@@ -438,7 +438,7 @@ function sessionClear()
   function renderUserInfo(data, rendreBlock) {
     const {firstName, lastName, yearOfBirth} = data;
     const template = `You are ${firstName} ${lastName} and you were born in ${yearOfBirth}.`;
-    rendreBlock.prepend(template)
+    rendreBlock.prepend(template);
   }
 </script>
 </body>
