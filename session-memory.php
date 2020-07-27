@@ -4,59 +4,29 @@ ini_set('session.cookie_lifetime', 120960);
 
 date_default_timezone_set("Europe/Kiev");
 
-$_POST = json_decode(file_get_contents("php://input"), true);
-
 session_start();
 
-if (isset($_POST['form'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
-    saveUserInfo($_POST['form']);
+    if (key_exists('form', $_POST)) {
+        saveUserInfo($_POST['form']);
+    }
+    if (key_exists('sessionClear', $_POST)) {
+        session_destroy();
+        header("Location: " . $_SERVER['REQUEST_URI']);
+    }
 
-    sendResponse($_SESSION);
-
-
+} else {
+    $_SESSION['counter'] = key_exists('counter', $_SESSION) ? $_SESSION['counter'] + 1 : 1;
+    $_SESSION['lastConnect'] = date('m/d/Y  H:i:s');
 }
 
-if (isset($_POST['sessionClear'])) {
-    $clearSession = sessionClear();
-    $data = [
-        'message' => $clearSession
-            ? 'The session has been cleared'
-            : 'An error occurred while clearing the session'
-    ];
-    sendResponse($data);
-}
 
-if (!isset($_SESSION['counter'])) {
-    $_SESSION['counter'] = 0;
-}
-$_SESSION['counter']++;
-$_SESSION['lastConnect'] = date('m/d/Y  H:i:s');
-
-
-/**
- * response data to js
- *
- * @param array $data data dor response
- * @param string $errorCode
- * @param string $errorMessage
- */
-function sendResponse($data, $errorCode = null, $errorMessage = null)
-{
-    header('Content-Type: application/json; charset=utf-8');
-    $response['data'] = $data;
-    $response['error']['code'] = $errorCode;
-    $response['error']['message'] = $errorMessage;
-
-    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit;
-}
 
 /**
  * save new  data  to session
  *
  * @param  array $params
- * // * @param string $sessionId current  session id
  */
 function saveUserInfo($params)
 {
@@ -69,11 +39,8 @@ function saveUserInfo($params)
 
     $yearOfBirth = getYearOfBirth($data['age']);
 
-    $data['info']['yearOfBirth'] = $yearOfBirth;
+    $data['yearOfBirth'] = $yearOfBirth;
     $_SESSION['info'] = $data;
-
-
-//    add return $_SESSION
 
 }
 
@@ -96,28 +63,20 @@ function getYearOfBirth($age)
  */
 function isInfo($data)
 {
-    return isset($data['info']);
+    return key_exists('info', $data);
 }
 
 /**
- * render  html  block  "user info"
+ *  user info
  * @param array $info
  * @return string
  */
-function getUseInfoHtml($info)
+function getUserInfoStr($info)
 {
     $template = 'You are %s %s and you were born in %s.';
     return sprintf($template, $info["firstName"], $info["lastName"], $info["yearOfBirth"]);
 }
 
-/**
- * clear  current  session
- * @return bool
- */
-function sessionClear()
-{
-    return session_destroy();
-}
 
 ?>
 <!DOCTYPE html>
@@ -269,9 +228,12 @@ function sessionClear()
 
     .session-clear {
       position: absolute;
-      cursor: pointer;
       bottom: 10%;
       right: 10%;
+    }
+
+    .session-clear .session-clear__button {
+      cursor: pointer;
       padding: 15px;
       border: none;
       font-size: 1.1rem;
@@ -286,15 +248,15 @@ function sessionClear()
     <div class="session__info session-info">
       <div class="session-info__text">
           <?php
-          if (isInfo($_SESSION)) {
-              echo getUseInfoHtml($_SESSION['info']);
-          }
+            if (isInfo($_SESSION)) {
+                echo getUserInfoStr($_SESSION['info']);
+            }
           ?>
         You have been here
         <span class="session-info__connection-count connection-count"
         >
-                    <?= $_SESSION['counter'] ?>
-                </span>
+            <?= $_SESSION['counter'] ?>
+        </span>
           <?= ngettext("time", "times", $_SESSION['counter']) ?>
         . Your the last visit was
         <time
@@ -308,8 +270,7 @@ function sessionClear()
     </div>
       <?php
       if (!isInfo($_SESSION)) { ?>
-
-        <div class="session__form session-form">
+        <form class="session__form session-form" name="form" method="post" action=".<?= $_SERVER['PHP_SELF'] ?>">
           <div class="session-form__item">
             <label for="first-name" class="form-label form-label--center"
             >First name</label
@@ -317,7 +278,7 @@ function sessionClear()
             <input
                 required="true"
                 type="text"
-                name="firstName"
+                name="form[firstName]"
                 class="form-input"
                 id="first-name"
             />
@@ -329,14 +290,14 @@ function sessionClear()
             <input
                 required="true"
                 type="text"
-                name="lastName"
+                name="form[lastName]"
                 class="form-input"
                 id="last-name"
             />
           </div>
           <div class="session-form__item">
             <label for="age" class="form-label form-label--center">Age</label>
-            <select name="age" class="form-select" id="age">
+            <select name="form[age]" class="form-select" id="age">
                 <?php
                 for ($i = 1; $i <= 35; $i++) {
                     $html = $i == 15 ? "<option selected value='$i'>$i</option>" : "<option  value='$i'>$i</option>";
@@ -346,106 +307,17 @@ function sessionClear()
             </select>
           </div>
 
-          <button type="button" class="session-form__button form-button">
+          <button type="submit" class="session-form__button form-button">
             Send
           </button>
-        </div>
+        </form>
 
       <?php } ?>
   </div>
-  <button class="session-clear">Clear Session</button>
+  <form class="session__form session-clear" name="sessionClear" method="post" action=".<?= $_SERVER['PHP_SELF'] ?>">
+    <input type="hidden" name="sessionClear" value="1">
+    <button type="submit" class="session-clear__button">Clear Session</button>
+  </form>
 </div>
-<script>
-  const form = document.querySelector(".session-form");
-  const buttonClear = document.querySelector(".session-clear");
-  const sessionInfoText = document.querySelector('.session-info__text');
-
-  if (form) {
-    const button = form.querySelector(".form-button");
-    const firstName = form.querySelector("input[name='firstName']");
-    const lastName = form.querySelector("input[name='lastName']");
-    const age = form.querySelector("select[name='age']");
-
-    button.addEventListener("click", async (event) => {
-      event.preventDefault;
-      try {
-        const params = {
-          form: {
-            firstName: firstName.value,
-            lastName: lastName.value,
-            age: age.value,
-          },
-        };
-        const {data, error} = await sendForm(params);
-
-        if (error.code) {
-          console.log(error.message);
-          return;
-        }
-
-        form.remove();
-
-        renderUserInfo(data.info, sessionInfoText);
-
-      } catch (e) {
-        console.log(e);
-      }
-
-    });
-  }
-
-  buttonClear.addEventListener('click', async (event) => {
-    try {
-      const {data} = await  clearSession();
-      console.info(data.message);
-      location.reload();
-    } catch (e) {
-      console.log(e);
-    }
-  });
-
-
-  async function sendForm(params) {
-    try {
-      const response = await fetch("./session-memory.php", {
-        method: 'post',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      });
-      const result = await response.json();
-      return result;
-    } catch (e) {
-      return Promise.reject(e);
-    }
-
-  }
-
-  async function clearSession() {
-
-    try {
-      const response = await fetch('./session-memory.php', {
-        method: 'post',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({sessionClear: true}),
-      });
-      const result = await response.json();
-      return result;
-    } catch (e) {
-      return Promise.reject(e);
-    }
-
-  }
-
-
-  function renderUserInfo(data, rendreBlock) {
-    const {firstName, lastName, yearOfBirth} = data;
-    const template = `You are ${firstName} ${lastName} and you were born in ${yearOfBirth}.`;
-    rendreBlock.prepend(template);
-  }
-</script>
 </body>
 </html>
